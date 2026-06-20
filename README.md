@@ -4,9 +4,9 @@ A leakage-safe machine-learning pipeline that quantifies the intraday dislocatio
 
 ---
 
-## Thesis in one sentence
+## Thesis 
 
-When a Treasury auction clears with a tail, the on-the-run bond dislocates from fair value and the footprint decays with a measurable half-life — longer in stressed market regimes. That persistence is the signal.
+When a Treasury auction clears with a tail, the on-the-run bond dislocates from fair value, and the footprint decays with a measurable half-life — longer in stressed market regimes. That persistence is the signal.
 
 ---
 
