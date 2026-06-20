@@ -32,7 +32,7 @@ RANDOM_SEED         = 42
 # ── CV ────────────────────────────────────────────────────────────────────────
 CV_N_SPLITS  = 5
 CV_MIN_TRAIN = 20               # minimum auctions in first training fold
-EMBARGO_TD   = pd.Timedelta('2BD')
+EMBARGO_TD   = pd.Timedelta(days=2)   # 2 business-day embargo buffer
 
 # ── feature / target names ────────────────────────────────────────────────────
 TARGET = f'd_level_h{H_FORECAST}'

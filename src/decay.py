@@ -44,7 +44,10 @@ def local_projection_decay(decay_panel, shock_col='auction_shock',
         except Exception as exc:
             print(f'  LP h={h} failed: {exc}')
 
-    return pd.DataFrame(rows).set_index('h')
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    return df.set_index('h')
 
 
 def fit_half_life(irf_df):

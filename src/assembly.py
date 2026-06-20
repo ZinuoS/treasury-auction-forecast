@@ -111,6 +111,10 @@ def clean_intraday_csv(path=None, col_map=None, skip_rows=None):
         df['auction_id'] = df['timestamp_et'].dt.strftime('%Y%m%d')
         print('  ⚠ auction_id derived from date. Add to INTRADAY_COL_MAP if available.')
 
+    # Ensure auction_id is always string so merges with parquet caches are type-consistent
+    if 'auction_id' in df.columns:
+        df['auction_id'] = df['auction_id'].astype(str)
+
     sort_cols = [c for c in ['auction_id', 'timestamp_et'] if c in df.columns]
     return df.sort_values(sort_cols).reset_index(drop=True)
 
@@ -151,6 +155,10 @@ def clean_bloomberg_csv(path=None, col_map=None, skip_rows=None):
         if c in df.columns and df[c].dropna().max() <= 1.5:
             df[c] = df[c] * 100
             print(f'  {c}: converted 0–1 → 0–100 scale')
+
+    # Ensure auction_id is always string for type-consistent merges
+    if 'auction_id' in df.columns:
+        df['auction_id'] = df['auction_id'].astype(str)
 
     return (df.sort_values('auction_date').reset_index(drop=True)
             if 'auction_date' in df.columns else df)

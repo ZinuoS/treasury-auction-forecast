@@ -24,7 +24,12 @@ from src.features import collapse_to_auction, fit_daily_pca, build_targets
 # ── Point forecast helpers ────────────────────────────────────────────────────
 
 def regime_baseline(train, test, target=TARGET):
-    """Regime-conditional mean — the benchmark any model must beat."""
+    """Regime-conditional mean — the benchmark any model must beat.
+    Falls back to unconditional mean if regime_eod column is absent.
+    """
+    if 'regime_eod' not in train.columns or 'regime_eod' not in test.columns:
+        fallback = train[target].mean()
+        return np.full(len(test), fallback)
     means    = train.groupby('regime_eod')[target].mean()
     fallback = train[target].mean()
     return test['regime_eod'].map(means).fillna(fallback).values
