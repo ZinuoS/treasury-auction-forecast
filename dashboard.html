@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auction Curve Monitor</title>
+<style>
+:root{
+  --ink:#0F2540; --ink-2:#1C3A5E; --paper:#F4F6F8; --card:#FFFFFF;
+  --line:#E3E7EC; --line-2:#EDF0F3; --muted:#69757F; --muted-2:#9AA6B0;
+  --rich:#14857A; --rich-soft:#14857A22;
+  --cheap:#C75B39; --cheap-soft:#C75B3922;
+  --signal:#BE9C45; --steel:#3E6E97;
+  --calm:#14857A; --normal:#BE9C45; --stressed:#C75B39;
+  --shadow:0 1px 2px rgba(15,37,64,.04),0 8px 24px rgba(15,37,64,.06);
+  --disp:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:0 0 48px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+.eyebrow{font:600 10.5px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pos{color:var(--cheap)} .neg{color:var(--rich)}
+
+/* topbar */
+.topbar{position:sticky;top:0;z-index:20;background:rgba(244,246,248,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;gap:18px;height:64px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font:600 17px/1 var(--disp);letter-spacing:-.01em}
+.brand span{font:500 10.5px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.spacer{flex:1}
+.ctrl{display:flex;align-items:center;gap:8px}
+.ctrl label{font:600 10px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+select{font:500 13px/1 var(--body);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 11px;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2369757F' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+select:focus-visible{outline:2px solid var(--steel);outline-offset:1px}
+.live{display:flex;align-items:center;gap:7px;font:600 10px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--rich);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #14857a66}70%{box-shadow:0 0 0 7px #14857a00}100%{box-shadow:0 0 0 0 #14857a00}}
+
+/* auc head */
+.auc-head{padding:26px 0 14px}
+.auc-head h1{margin:0;font:600 26px/1.1 var(--disp);letter-spacing:-.015em}
+.auc-head p{margin:6px 0 0;color:var(--muted);font-size:13.5px}
+
+/* BLUF */
+.bluf{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:8px 0 22px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+.stat .k{display:flex;align-items:center;gap:6px;margin-bottom:9px}
+.stat .big{font:600 30px/1 var(--disp);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat .sub{margin-top:6px;font-size:12px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font:600 12px/1 var(--body)}
+.chip .led{width:8px;height:8px;border-radius:50%}
+
+/* main grid */
+.grid{display:grid;grid-template-columns:1.62fr 1fr;gap:18px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.panel .hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0}
+.panel .hd h2{margin:0;font:600 14px/1.2 var(--disp);letter-spacing:-.005em}
+.panel .bd{padding:14px 20px 20px}
+
+/* hero */
+.hero .hd{flex-wrap:wrap;gap:10px}
+.seg{display:inline-flex;background:var(--line-2);border-radius:9px;padding:3px}
+.seg button{font:600 11.5px/1 var(--body);border:0;background:transparent;color:var(--muted);padding:7px 13px;border-radius:7px;cursor:pointer;letter-spacing:.02em}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(15,37,64,.10)}
+.chartwrap{position:relative}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.legend{display:flex;gap:18px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted)}
+.legend i{width:14px;height:0;border-top:2.5px solid currentColor;display:inline-block}
+.legend .gh{border-top-style:dashed;color:var(--muted-2)}
+
+/* metrics strip */
+.mstrip{display:flex;margin-top:12px;border:1px solid var(--line-2);border-radius:10px;overflow:hidden}
+.mmet{flex:1;padding:9px 11px;border-right:1px solid var(--line-2);min-width:0}
+.mmet:last-child{border-right:0}
+.mmet .ml{font:600 9.5px/1 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mmet .mv{font:600 14px/1.3 var(--mono);letter-spacing:-.01em;margin-top:4px;font-variant-numeric:tabular-nums}
+.mmet .md{font:500 10px/1 var(--mono);margin-top:3px;font-variant-numeric:tabular-nums;color:var(--muted-2)}
+
+/* scrubber */
+.scrub{margin-top:14px;padding-top:16px;border-top:1px solid var(--line-2)}
+.scrub .row{display:flex;align-items:center;gap:14px}
+.playbtn{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer;display:grid;place-items:center;color:var(--ink)}
+.playbtn:hover{border-color:var(--steel);color:var(--steel)}
+.playbtn:focus-visible{outline:2px solid var(--steel);outline-offset:2px}
+input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;background:linear-gradient(90deg,var(--signal),var(--steel));outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--card);border:2.5px solid var(--steel);box-shadow:var(--shadow);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--card);border:2.5px solid var(--steel);cursor:pointer}
+.daylab{flex:none;min-width:140px;text-align:right}
+.daylab b{font:600 15px/1 var(--disp)} .daylab .t{font-size:11px;color:var(--muted)}
+.ticks{display:flex;justify-content:space-between;margin-top:7px;padding:0 50px 0 52px}
+.ticks span{font:500 10px/1 var(--mono);color:var(--muted-2)}
+
+/* right cards */
+.stack{display:flex;flex-direction:column;gap:18px}
+.kv{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-2)}
+.kv:last-child{border-bottom:0}
+.kv .lab{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;flex:1}
+.kv .rhs{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.kv .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:500}
+.kv .tag{font:600 10.5px/1 var(--body);padding:4px 8px;border-radius:6px;margin-left:8px}
+.tag-rich{background:var(--rich-soft);color:var(--rich)} .tag-cheap{background:var(--cheap-soft);color:var(--cheap)}
+.tag-mid{background:#BE9C4522;color:#8a7220}
+.pctx{font-size:10.5px;color:var(--muted-2)}
+
+/* takedown */
+.takedown{margin-top:4px}
+.tdbar{display:flex;height:30px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.tdbar div{display:grid;place-items:center;font:600 11px/1 var(--body);color:#fff}
+.tdkey{display:flex;gap:14px;margin-top:9px;flex-wrap:wrap}
+.tdkey span{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.tdkey i{width:9px;height:9px;border-radius:3px}
+
+/* mood */
+.mood{display:flex;align-items:center;gap:14px}
+.moodled{flex:none;width:46px;height:46px;border-radius:13px;display:grid;place-items:center}
+.moodled b{font:600 20px/1 var(--disp);color:#fff}
+.mood .txt b{font:600 15px/1 var(--disp)} .mood .txt p{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+.manchor{display:flex;gap:0;margin-top:12px;border-top:1px solid var(--line-2);padding-top:12px}
+.ma{flex:1;padding:0 14px 0 0}
+.ma:last-child{padding:0 0 0 14px;border-left:1px solid var(--line-2)}
+.mal{font:600 9.5px/1 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2);margin-bottom:4px}
+.mav{font:600 17px/1 var(--mono);font-variant-numeric:tabular-nums}
+
+/* forecast */
+.fc .call{font:500 13px/1.4 var(--disp);margin:2px 0 14px;color:var(--ink)}
+.rangewrap{position:relative;height:46px;margin:0 4px}
+.axis0{position:absolute;top:0;bottom:16px;width:1px;background:var(--line)}
+.rngbar{position:absolute;top:13px;height:8px;border-radius:6px;background:linear-gradient(90deg,var(--rich-soft),var(--cheap-soft))}
+.rngpt{position:absolute;top:6px;width:3px;height:22px;border-radius:3px}
+.rngscale{position:absolute;bottom:0;width:100%;display:flex;justify-content:space-between;font:500 10px/1 var(--mono);color:var(--muted-2)}
+.ptcall{font:700 28px/1 var(--mono);font-variant-numeric:tabular-nums;margin:4px 0 10px}
+.giveback{margin-top:10px;font-size:12.5px;color:var(--muted);line-height:1.45;padding:9px 12px;background:var(--line-2);border-radius:8px}
+.giveback b{color:var(--ink)}
+.trkline{margin-top:8px;font-size:11.5px;color:var(--muted-2)}
+.disc{margin-top:9px;font-size:11px;color:var(--muted-2);display:flex;gap:7px;align-items:flex-start}
+
+/* footprint */
+.foot .bd{padding-top:6px}
+.foot .lead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.foot .hl{font:600 30px/1 var(--disp);color:var(--signal);font-variant-numeric:tabular-nums}
+.foot .lead p{margin:0;color:var(--muted);font-size:13px;max-width:520px}
+.reversal{font-size:12.5px;color:var(--muted);padding:9px 13px;background:var(--line-2);border-radius:9px;line-height:1.45;margin-bottom:14px}
+.reversal b{color:var(--ink)}
+
+/* tooltip */
+.info{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--muted-2);color:var(--muted);font:700 9px/1 var(--body);cursor:help;flex:none}
+.info:hover::after,.info:focus::after{content:attr(data-tip);position:absolute;bottom:140%;left:50%;transform:translateX(-50%);width:210px;background:var(--ink);color:#fff;font:400 11.5px/1.45 var(--body);letter-spacing:0;text-transform:none;padding:9px 11px;border-radius:9px;box-shadow:var(--shadow);z-index:30;pointer-events:none}
+.info:hover::before,.info:focus::before{content:"";position:absolute;bottom:140%;left:50%;transform:translate(-50%,7px);border:5px solid transparent;border-top-color:var(--ink);z-index:30}
+
+.foot-note{margin-top:26px;text-align:center;color:var(--muted-2);font-size:11px}
+
+@media(max-width:920px){
+  .bluf{grid-template-columns:repeat(2,1fr)}
+  .grid{grid-template-columns:1fr}
+  .mstrip{flex-wrap:wrap}
+  .mmet{min-width:calc(33.33% - 1px)}
+}
+@media(prefers-reduced-motion:reduce){.dot{animation:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="wrap">
+  <div class="brand"><b>Auction Curve Monitor</b><span>Rates · Pilot: 30Y</span></div>
+  <div class="spacer"></div>
+  <div class="ctrl"><label for="tenor">Tenor</label>
+    <select id="tenor">
+      <option value="30">30-Year</option>
+      <option disabled>10-Year — coming soon</option>
+      <option disabled>5-Year — coming soon</option>
+    </select></div>
+  <div class="ctrl"><label for="auc">Auction</label><select id="auc"></select></div>
+  <div class="live"><span class="dot"></span>Live</div>
+</div></div>
+
+<div class="wrap">
+  <div class="auc-head">
+    <h1 id="aucTitle"></h1>
+    <p id="aucSub"></p>
+  </div>
+
+  <div class="bluf">
+    <div class="stat">
+      <div class="k"><span class="eyebrow">30Y vs auction close</span></div>
+      <div class="big mono" id="s_move">—</div>
+      <div class="sub" id="s_move_sub">on the selected day</div>
+    </div>
+    <div class="stat">
+      <div class="k"><span class="eyebrow">Auction tail</span>
+        <span class="info" tabindex="0" data-tip="How the auction priced vs the when-issued yield just before 1pm. Positive = tailed (came cheap, soft demand). Negative = stopped through (strong demand).">i</span></div>
+      <div class="big mono" id="s_tail">—</div>
+      <div class="sub" id="s_tail_sub">stop vs when-issued</div>
+    </div>
+    <div class="stat">
+      <div class="k"><span class="eyebrow">Influence half-life</span>
+        <span class="info" tabindex="0" data-tip="How fast the auction's push on the curve fades. A 3-day half-life means half the yield effect is gone after 3 trading days.">i</span></div>
+      <div class="big mono" id="s_hl">—</div>
+      <div class="sub">trading days to fade by half</div>
+    </div>
+    <div class="stat">
+      <div class="k"><span class="eyebrow">Market mood</span>
+        <span class="info" tabindex="0" data-tip="How orderly the long bond traded around the auction — based on the size and speed of 30Y moves in the auction window.">i</span></div>
+      <div id="s_mood_chip" class="chip"><span class="led"></span><span id="s_mood">—</span></div>
+      <div class="sub" id="s_mood_sub"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="panel hero">
+      <div class="hd">
+        <h2>The curve around the auction</h2>
+        <div class="seg" role="group" aria-label="View">
+          <button id="vYield" aria-pressed="true">Yields</button>
+          <button id="vChange" aria-pressed="false">Change since auction</button>
+        </div>
+      </div>
+      <div class="bd">
+        <div class="chartwrap"><div id="curve"></div></div>
+        <div class="legend" id="legend"></div>
+
+        <!-- curve metrics strip -->
+        <div class="mstrip">
+          <div class="mmet">
+            <div class="ml">30Y level</div>
+            <div class="mv" id="mm_30y">—</div>
+            <div class="md" id="mm_30y_d">—</div>
+          </div>
+          <div class="mmet">
+            <div class="ml">2s10s</div>
+            <div class="mv" id="mm_2s10s">—</div>
+            <div class="md" id="mm_2s10s_d">—</div>
+          </div>
+          <div class="mmet">
+            <div class="ml">5s30s</div>
+            <div class="mv" id="mm_5s30s">—</div>
+            <div class="md" id="mm_5s30s_d">—</div>
+          </div>
+          <div class="mmet">
+            <div class="ml">10s30s</div>
+            <div class="mv" id="mm_10s30s">—</div>
+            <div class="md" id="mm_10s30s_d">—</div>
+          </div>
+          <div class="mmet">
+            <div class="ml">5s10s30s fly</div>
+            <div class="mv" id="mm_fly">—</div>
+            <div class="md" id="mm_fly_d">—</div>
+          </div>
+          <div class="mmet">
+            <div class="ml">rich/cheap to crv</div>
+            <div class="mv" id="mm_rc">—</div>
+            <div class="md" id="mm_rc_lbl" style="font-size:9.5px">OTR vs fair value</div>
+          </div>
+        </div>
+
+        <div class="scrub">
+          <div class="row">
+            <button class="playbtn" id="play" aria-label="Play day-by-day">
+              <svg width="13" height="14" viewBox="0 0 13 14"><path id="playicon" d="M1 1l11 6L1 13z" fill="currentColor"/></svg>
+            </button>
+            <input type="range" id="day" min="0" max="5" step="1" value="1" aria-label="Days after auction">
+            <div class="daylab"><b id="dayBig">Day +1</b><div class="t" id="dayT">trading day after auction</div></div>
+          </div>
+          <div class="ticks"><span>auction</span><span>+1</span><span>+2</span><span>+3</span><span>+4</span><span>+5</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="stack">
+      <section class="panel">
+        <div class="hd"><h2>Auction snapshot</h2></div>
+        <div class="bd">
+          <div class="kv">
+            <span class="lab">Tail / through
+              <span class="info" tabindex="0" data-tip="Stop price vs where the when-issued was trading just before 1pm. Tailed = came cheap (dealers had to take more). Through = came rich (strong demand).">i</span>
+            </span>
+            <div class="rhs">
+              <span><span class="val" id="k_tail">—</span><span class="tag" id="k_tail_tag"></span></span>
+              <span class="pctx" id="k_tail_pctx"></span>
+            </div>
+          </div>
+          <div class="kv">
+            <span class="lab">Stop vs 12-auction median
+              <span class="info" tabindex="0" data-tip="How this stop priced relative to the trailing 12 auction stops. Positive = came cheaper than usual; negative = richer than usual.">i</span>
+            </span>
+            <span class="val" id="k_stop_med">—</span>
+          </div>
+          <div class="kv">
+            <span class="lab">Bid-to-cover
+              <span class="info" tabindex="0" data-tip="Total bids divided by the amount sold. 2.50× or above is considered strong for 30Y bonds.">i</span>
+            </span>
+            <div class="rhs">
+              <span><span class="val" id="k_btc">—</span><span class="tag" id="k_btc_tag"></span></span>
+              <span class="pctx" id="k_btc_pctx"></span>
+            </div>
+          </div>
+          <div class="kv">
+            <span class="lab">WI concession
+              <span class="info" tabindex="0" data-tip="How much the bond cheapened in the days leading into the auction to attract buyers. Larger = market demanded more to absorb supply.">i</span>
+            </span>
+            <span class="val" id="k_con">—</span>
+          </div>
+          <div class="takedown">
+            <div class="lab eyebrow" style="margin:8px 0 8px">Who bought it</div>
+            <div class="tdbar" id="tdbar"></div>
+            <div class="tdkey">
+              <span><i style="background:var(--ink)"></i>Indirect <span class="mono" id="td_ind"></span></span>
+              <span><i style="background:var(--steel)"></i>Direct <span class="mono" id="td_dir"></span></span>
+              <span><i style="background:var(--muted-2)"></i>Dealers <span class="mono" id="td_dlr"></span> <span class="pctx" id="td_dlr_pctx"></span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="hd"><h2>Market mood</h2></div>
+        <div class="bd">
+          <div class="mood">
+            <div class="moodled" id="moodLed"><b id="moodLetter"></b></div>
+            <div class="txt"><b id="moodName"></b><p id="moodLine"></p></div>
+          </div>
+          <div class="manchor">
+            <div class="ma">
+              <div class="mal">30Y intraday range</div>
+              <div class="mav" id="maChop">—</div>
+            </div>
+            <div class="ma">
+              <div class="mal">MOVE index</div>
+              <div class="mav" id="maMove">—</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel fc">
+        <div class="hd"><h2>What the model expects next</h2></div>
+        <div class="bd">
+          <div class="call" id="fcCall"></div>
+          <div class="ptcall" id="fcPtCall" style="display:none"></div>
+          <div id="fcRangeWrap">
+            <div class="rangewrap">
+              <div class="axis0" id="fcAxis"></div>
+              <div class="rngbar" id="fcBar"></div>
+              <div class="rngpt" id="fcPt"></div>
+              <div class="rngscale"><span id="fcLo"></span><span>0</span><span id="fcHi"></span></div>
+            </div>
+          </div>
+          <div class="giveback" id="fcGiveback"></div>
+          <div class="trkline" id="fcTrack"></div>
+          <div class="disc">
+            <span class="info" tabindex="0" data-tip="Based on auction-day signals and past auction patterns. A likely range, not investment advice.">i</span>
+            <span>Model estimate of the next-day 30Y move — a likely range, not a recommendation.</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel foot" style="margin-top:18px">
+    <div class="hd"><h2>How long does this auction keep pushing the curve?</h2></div>
+    <div class="bd">
+      <div class="lead">
+        <span class="hl mono" id="hlBig"></span>
+        <p id="hlText"></p>
+      </div>
+      <div class="reversal" id="hlReversal"></div>
+      <div id="decay"></div>
+    </div>
+  </section>
+
+  <div class="foot-note">Rates desk pilot · sample data for three illustrative auctions · 30-Year</div>
+</div>
+
+<script>
+// ── Build flag ────────────────────────────────────────────────────────────────
+// INTERNAL_ASSERTIVE: true = single point call (desk-only build).
+// false (default) = probability range shown to clients.
+const INTERNAL_ASSERTIVE = false;
+
+// ── Data source ───────────────────────────────────────────────────────────────
+// Set DATA_URL to 'data/dashboard_data.json' after running:
+//   python src/export_dashboard.py
+// When null, uses embedded sample data.
+const DATA_URL = null;
+
+// ── Sample data ───────────────────────────────────────────────────────────────
+// curves[day] = [2y,3y,5y,7y,10y,20y,30y] yields in %
+// richcheap[day] = OTR 30Y vs Svensson fair value in bps (+ = cheap to model)
+// tailPct / btcPct / dlrPct = percentile rank vs trailing 12 auctions (0–100)
+// fcGiveback = expected give-back of the concession on next day
+// aucMove = D0→D1 post-auction push in bps; rev5d = bps that unwound by D5
+const SAMPLE = {
+  jun12:{
+    title:"30-Year Bond · June 12, 2026",
+    sub:"Reopening · $22bn · stop 4.780% · 1:00pm ET",
+    regime:"calm",
+    tail:1.3, tailPct:35,
+    btc:2.41, btcPct:48,
+    ind:68, dir:18, dlr:14, dlrPct:22,
+    con:2.1, stopVsMedian:+0.3,
+    chop_bps:2.0, move:98,
+    fcPt:-2.0, fcLo:-5.5, fcHi:1.5,
+    fcText:"Soft demand but orderly — 30Y likely to richen slightly as the concession unwinds.",
+    fcGiveback:{bps:2.0, pct:40, con:2.1, dir:"richen"},
+    fcAccuracy:58,
+    curves:{
+      0:[3.92,3.98,4.07,4.18,4.32,4.66,4.780],
+      1:[3.93,3.99,4.09,4.21,4.36,4.70,4.822],
+      2:[3.93,3.99,4.08,4.20,4.35,4.69,4.808],
+      3:[3.92,3.98,4.07,4.19,4.33,4.67,4.792],
+      4:[3.92,3.97,4.06,4.18,4.32,4.66,4.783],
+      5:[3.91,3.97,4.06,4.17,4.31,4.65,4.776]
+    },
+    richcheap:{0:1.3,1:0.8,2:0.5,3:0.3,4:0.2,5:0.1},
+    aucMove:4.2, rev5d:4.6,
+    decay:[1,.66,.44,.29,.19,.12,.08,.05,.03,.02], hl:3.1
+  },
+  may08:{
+    title:"30-Year Bond · May 8, 2026",
+    sub:"New issue · $25bn · stop 4.610% · 1:00pm ET",
+    regime:"stressed",
+    tail:3.4, tailPct:85,
+    btc:2.18, btcPct:12,
+    ind:59, dir:16, dlr:25, dlrPct:88,
+    con:4.6, stopVsMedian:+2.1,
+    chop_bps:8.5, move:131,
+    fcPt:-4.5, fcLo:-10.0, fcHi:1.0,
+    fcText:"Sharp cheapening into a stressed auction — long end likely snaps back as the concession unwinds.",
+    fcGiveback:{bps:4.5, pct:55, con:4.6, dir:"richen"},
+    fcAccuracy:58,
+    curves:{
+      0:[3.80,3.86,3.96,4.07,4.20,4.52,4.610],
+      1:[3.82,3.89,4.01,4.14,4.29,4.63,4.742],
+      2:[3.83,3.90,4.02,4.16,4.31,4.65,4.766],
+      3:[3.82,3.89,4.01,4.14,4.28,4.61,4.712],
+      4:[3.81,3.88,3.99,4.12,4.26,4.59,4.681],
+      5:[3.81,3.87,3.98,4.10,4.24,4.57,4.660]
+    },
+    richcheap:{0:3.4,1:2.7,2:2.1,3:1.7,4:1.3,5:1.0},
+    aucMove:13.2, rev5d:7.8,
+    decay:[1,.78,.61,.48,.38,.30,.24,.19,.15,.12], hl:5.4
+  },
+  apr10:{
+    title:"30-Year Bond · April 10, 2026",
+    sub:"Reopening · $22bn · stop 4.440% · 1:00pm ET",
+    regime:"normal",
+    tail:-0.8, tailPct:18,
+    btc:2.63, btcPct:74,
+    ind:74, dir:19, dlr:7, dlrPct:8,
+    con:1.2, stopVsMedian:-0.6,
+    chop_bps:3.8, move:112,
+    fcPt:1.2, fcLo:-1.5, fcHi:4.0,
+    fcText:"Strong demand — market likely gives back a touch of the richening as fast-money trims.",
+    fcGiveback:{bps:1.2, pct:43, con:1.2, dir:"cheapen"},
+    fcAccuracy:58,
+    curves:{
+      0:[3.71,3.77,3.87,3.98,4.10,4.40,4.440],
+      1:[3.70,3.76,3.85,3.96,4.07,4.37,4.412],
+      2:[3.70,3.75,3.84,3.95,4.06,4.36,4.405],
+      3:[3.71,3.76,3.85,3.96,4.08,4.38,4.421],
+      4:[3.71,3.77,3.86,3.97,4.09,4.39,4.430],
+      5:[3.72,3.77,3.87,3.98,4.10,4.40,4.438]
+    },
+    richcheap:{0:-0.8,1:-0.5,2:-0.3,3:-0.1,4:0.0,5:0.1},
+    aucMove:-2.8, rev5d:2.6,
+    decay:[1,.58,.34,.20,.12,.07,.04,.02,.01,.01], hl:2.4
+  }
+};
+
+const REGIME={
+  calm:{name:"Calm",letter:"C",c:"var(--calm)",line:"The market absorbed the new supply smoothly — small, orderly moves."},
+  normal:{name:"Normal",letter:"N",c:"var(--normal)",line:"A typical auction — some two-way action, nothing unusual."},
+  stressed:{name:"Stressed",letter:"S",c:"var(--stressed)",line:"Choppy, jumpy trading — buyers needed a real concession to step in."}
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let AUCTIONS=SAMPLE, A="jun12", DAY=1, VIEW="yield", timer=null;
+const $=id=>document.getElementById(id);
+const bps=(a,b)=>Math.round((a-b)*1000)/10;
+const sgn=v=>(v>0?"+":"")+v.toFixed(1);
+const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+function ord(n){const s=["th","st","nd","rd"],v=n%100;return n+((s[(v-20)%10]||s[v])||"th")}
+function pctLabel(pct){
+  if(pct==null)return "";
+  const q=pct<=15?"very low":pct<=30?"low":pct>=85?"very high":pct>=70?"high":null;
+  return `${ord(pct)} pct`+(q?" — "+q:"");
+}
+
+// ── Curve metric helpers ──────────────────────────────────────────────────────
+// c = [2y,3y,5y,7y,10y,20y,30y]
+function metrics(c){
+  return {
+    y30: c[6],
+    s2s10: bps(c[4],c[0]),
+    s5s30: bps(c[6],c[2]),
+    s10s30: bps(c[6],c[4]),
+    fly: bps(2*c[4]-c[2]-c[6], 0)   // 5s10s30s butterfly
+  };
+}
+
+// ── Hero chart ────────────────────────────────────────────────────────────────
+const MATS=[2,3,5,7,10,20,30];
+function drawCurve(){
+  const d=AUCTIONS[A], base=d.curves[0], cur=d.curves[DAY];
+  const W=720,H=320,L=52,R=22,T=24,B=46,iw=W-L-R,ih=H-T-B;
+  const xs=MATS.map((_,i)=>L+iw*i/(MATS.length-1));
+  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Yield curve">`;
+
+  if(VIEW==="yield"){
+    const all=[...base,...cur];
+    let lo=Math.min(...all),hi=Math.max(...all);
+    const pad=(hi-lo)*.18||.1; lo-=pad; hi+=pad;
+    const y=v=>T+ih*(1-(v-lo)/(hi-lo));
+    for(let g=0;g<=4;g++){
+      const yy=T+ih*g/4,val=hi-(hi-lo)*g/4;
+      svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="var(--line-2)"/>`;
+      svg+=`<text x="${L-9}" y="${yy+3}" text-anchor="end" font-size="10" fill="var(--muted-2)" font-family="var(--mono)">${val.toFixed(2)}</text>`;
+    }
+    svg+=path(xs,base.map(y),"var(--muted-2)",2,true);
+    const col30=cur[6]>=base[6]?"var(--cheap)":"var(--rich)";
+    svg+=path(xs,cur.map(y),col30,3,false);
+    cur.forEach((v,i)=>{
+      const r=i===6?5.5:3.2;
+      svg+=`<circle cx="${xs[i]}" cy="${y(v)}" r="${r}" fill="${i===6?col30:"var(--card)"}" stroke="${i===6?"var(--card)":col30}" stroke-width="2"/>`;
+    });
+    svg+=callout(xs[6],y(cur[6]),`${cur[6].toFixed(3)}%`,`${sgn(bps(cur[6],base[6]))} bps`,col30);
+    MATS.forEach((m,i)=>svg+=`<text x="${xs[i]}" y="${H-18}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="var(--mono)">${m}y</text>`);
+  } else {
+    const ch=cur.map((v,i)=>bps(v,base[i]));
+    let hi=Math.max(2,...ch.map(Math.abs)); hi*=1.25; const lo=-hi;
+    const y=v=>T+ih*(1-(v-lo)/(hi-lo)), y0=y(0);
+    for(let g=0;g<=4;g++){
+      const yy=T+ih*g/4,val=hi-(hi-lo)*g/4;
+      svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="var(--line-2)"/>`;
+      svg+=`<text x="${L-9}" y="${yy+3}" text-anchor="end" font-size="10" fill="var(--muted-2)" font-family="var(--mono)">${sgn(val)}</text>`;
+    }
+    svg+=`<line x1="${L}" y1="${y0}" x2="${W-R}" y2="${y0}" stroke="var(--ink)" stroke-width="1.2"/>`;
+    const area="M "+L+" "+y0+" "+xs.map((x,i)=>`L ${x.toFixed(1)} ${y(ch[i]).toFixed(1)}`).join(" ")+" L "+(W-R)+" "+y0+" Z";
+    const netUp=ch[6]>=0, col=netUp?"var(--cheap)":"var(--rich)";
+    svg+=`<path d="${area}" fill="${netUp?"var(--cheap-soft)":"var(--rich-soft)"}"/>`;
+    svg+=path(xs,ch.map(y),col,3,false);
+    ch.forEach((v,i)=>{
+      const up=v>=0,c=up?"var(--cheap)":"var(--rich)";
+      svg+=`<circle cx="${xs[i]}" cy="${y(v)}" r="${i===6?5.5:3.2}" fill="${i===6?c:"var(--card)"}" stroke="${c}" stroke-width="2"/>`;
+      svg+=`<text x="${xs[i]}" y="${y(v)+(up?-12:18)}" text-anchor="middle" font-size="10.5" font-family="var(--mono)" fill="${c}">${sgn(v)}</text>`;
+    });
+    MATS.forEach((m,i)=>svg+=`<text x="${xs[i]}" y="${H-18}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="var(--mono)">${m}y</text>`);
+  }
+  $("curve").innerHTML=svg+"</svg>";
+}
+
+function path(xs,ys,color,w,dash){
+  return `<path d="M ${xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L ")}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" ${dash?'stroke-dasharray="2 6"':''}/>`;
+}
+function callout(x,y,big,small,color){
+  const w=96,h=40,bx=Math.min(x+12,720-22-w),by=Math.max(y-h-10,4);
+  const sc=color==="var(--rich)"?"#7fd8cd":"#f0a98f";
+  return `<g><rect x="${bx}" y="${by}" width="${w}" height="${h}" rx="9" fill="var(--ink)"/>`
+    +`<text x="${bx+10}" y="${by+17}" font-size="13" font-family="var(--mono)" font-weight="600" fill="#fff">${big}</text>`
+    +`<text x="${bx+10}" y="${by+32}" font-size="11.5" font-family="var(--mono)" fill="${sc}">${small}</text></g>`;
+}
+
+// ── Metrics strip ─────────────────────────────────────────────────────────────
+function renderMetrics(){
+  const d=AUCTIONS[A];
+  const base=metrics(d.curves[0]), cur=metrics(d.curves[DAY]);
+  const rc=d.richcheap[DAY]??0;
+
+  function setMet(valId,dltId,val,dlt,unit){
+    $(valId).textContent=val;
+    if(dlt==null){$(dltId).textContent="—";$(dltId).style.color="var(--muted-2)";return;}
+    $(dltId).textContent=sgn(dlt)+unit;
+    $(dltId).style.color=dlt>0?"var(--cheap)":dlt<0?"var(--rich)":"var(--muted-2)";
+  }
+
+  const d30delta = bps(cur.y30,base.y30);
+  setMet("mm_30y","mm_30y_d", cur.y30.toFixed(3)+"%", d30delta, " bps");
+  setMet("mm_2s10s","mm_2s10s_d", cur.s2s10.toFixed(1)+" bp", cur.s2s10-base.s2s10, " bp");
+  setMet("mm_5s30s","mm_5s30s_d", cur.s5s30.toFixed(1)+" bp", cur.s5s30-base.s5s30, " bp");
+  setMet("mm_10s30s","mm_10s30s_d", cur.s10s30.toFixed(1)+" bp", cur.s10s30-base.s10s30, " bp");
+  setMet("mm_fly","mm_fly_d", cur.fly.toFixed(1)+" bp", cur.fly-base.fly, " bp");
+
+  // rich/cheap to curve: + = OTR cheap (above fair), − = OTR rich (below fair)
+  $("mm_rc").textContent=(rc>=0?"+":"")+rc.toFixed(1)+" bp";
+  $("mm_rc").style.color=rc>0.2?"var(--cheap)":rc<-0.2?"var(--rich)":"var(--muted)";
+  $("mm_rc_lbl").textContent=rc>0.2?"cheap to fair value":rc<-0.2?"rich to fair value":"on fair value";
+  $("mm_rc_lbl").style.color=rc>0.2?"var(--cheap)":rc<-0.2?"var(--rich)":"var(--muted-2)";
+}
+
+// ── Footprint chart ───────────────────────────────────────────────────────────
+function drawDecay(){
+  const d=AUCTIONS[A],W=720,H=130,L=8,R=8,T=14,B=26,iw=W-L-R,ih=H-T-B;
+  const n=d.decay.length,bw=iw/n*.62,gap=iw/n;
+  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Auction footprint by day">`;
+  d.decay.forEach((v,i)=>{
+    const x=L+gap*i+(gap-bw)/2,bh=ih*v,y=T+ih-bh;
+    svg+=`<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="${(i+1)<=d.hl?"var(--signal)":"#C9CED4"}"/>`;
+    svg+=`<text x="${x+bw/2}" y="${H-9}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="var(--muted-2)">+${i+1}</text>`;
+  });
+  const hx=L+gap*d.hl;
+  svg+=`<line x1="${hx}" y1="${T-6}" x2="${hx}" y2="${T+ih}" stroke="var(--ink)" stroke-dasharray="3 4" stroke-width="1.3"/>`;
+  svg+=`<text x="${hx+6}" y="${T+2}" font-size="10.5" font-family="var(--body)" font-weight="600" fill="var(--ink)">half gone</text>`;
+  $("decay").innerHTML=svg+"</svg>";
+}
+
+// ── Static (auction-level) render ─────────────────────────────────────────────
+function renderStatic(){
+  const d=AUCTIONS[A], rg=REGIME[d.regime];
+  $("aucTitle").textContent=d.title;
+  $("aucSub").textContent=d.sub;
+
+  // BLUF tail
+  $("s_tail").textContent=sgn(d.tail)+" bps";
+  $("s_tail").className="big mono "+(d.tail>0?"pos":"neg");
+  $("s_tail_sub").textContent=d.tail>0.5?"tailed — came cheap":d.tail<-0.5?"stopped through — strong demand":"on the screws";
+
+  // BLUF half-life
+  $("s_hl").textContent="~"+d.hl.toFixed(1);
+
+  // BLUF mood
+  $("s_mood").textContent=rg.name;
+  $("s_mood_chip").style.background=rg.c+"1a";
+  $("s_mood_chip").style.color=rg.c;
+  $("s_mood_chip").querySelector(".led").style.background=rg.c;
+  $("s_mood_sub").textContent="long-bond behaviour";
+
+  // Snapshot — tail
+  $("k_tail").textContent=sgn(d.tail)+" bp";
+  $("k_tail").className="val "+(d.tail>0.5?"pos":d.tail<-0.5?"neg":"");
+  const kt=$("k_tail_tag");
+  kt.textContent=d.tail>0.5?"tailed":d.tail<-0.5?"through":"screws";
+  kt.className="tag "+(d.tail>0.5?"tag-cheap":d.tail<-0.5?"tag-rich":"tag-mid");
+  $("k_tail_pctx").textContent=pctLabel(d.tailPct)+" vs last 12";
+
+  // Snapshot — stop vs median
+  const sm=d.stopVsMedian;
+  $("k_stop_med").textContent=(sm>=0?"+":"")+sm.toFixed(1)+" bp vs median";
+  $("k_stop_med").style.color=sm>0?"var(--cheap)":sm<0?"var(--rich)":"var(--muted)";
+
+  // Snapshot — BTC
+  $("k_btc").textContent=d.btc.toFixed(2)+"×";
+  const strong=d.btc>=2.5,weak=d.btc<2.25;
+  $("k_btc_tag").textContent=strong?"strong":weak?"soft":"solid";
+  $("k_btc_tag").className="tag "+(strong?"tag-rich":weak?"tag-cheap":"tag-mid");
+  $("k_btc_pctx").textContent=pctLabel(d.btcPct)+" vs last 12";
+
+  // Snapshot — concession
+  $("k_con").textContent=d.con.toFixed(1)+" bp";
+
+  // Snapshot — takedown
+  $("tdbar").innerHTML=
+    `<div style="width:${d.ind}%;background:var(--ink)">${d.ind}%</div>`
+    +`<div style="width:${d.dir}%;background:var(--steel)">${d.dir}%</div>`
+    +`<div style="width:${d.dlr}%;background:var(--muted-2)">${d.dlr}%</div>`;
+  $("td_ind").textContent=d.ind+"%";
+  $("td_dir").textContent=d.dir+"%";
+  $("td_dlr").textContent=d.dlr+"%";
+  const dlrHvy=d.dlr>=20, dlrLgt=d.dlr<12;
+  $("td_dlr_pctx").textContent="("+pctLabel(d.dlrPct)+(dlrHvy?" · heavy":dlrLgt?" · light":"")+")";
+
+  // Mood card
+  $("moodLed").style.background=rg.c;
+  $("moodLetter").textContent=rg.letter;
+  $("moodName").textContent=rg.name;
+  $("moodLine").textContent=rg.line;
+  $("maChop").textContent="±"+d.chop_bps.toFixed(1)+" bp";
+  $("maMove").textContent=d.move;
+
+  // Forecast
+  $("fcCall").textContent=d.fcText;
+  const gb=d.fcGiveback;
+  const gbDir=gb.dir==="richen"?"richens":"cheapens";
+
+  if(INTERNAL_ASSERTIVE){
+    $("fcPtCall").style.display="block";
+    $("fcRangeWrap").style.display="none";
+    $("fcPtCall").textContent=(d.fcPt<0?"":"+")+(d.fcPt).toFixed(1)+" bp";
+    $("fcPtCall").style.color=d.fcPt<0?"var(--rich)":"var(--cheap)";
+  } else {
+    $("fcPtCall").style.display="none";
+    $("fcRangeWrap").style.display="block";
+    const lo=Math.min(d.fcLo,-1),hi=Math.max(d.fcHi,1),span=hi-lo;
+    const px=v=>((v-lo)/span*100);
+    $("fcAxis").style.left=px(0)+"%";
+    $("fcBar").style.left=px(d.fcLo)+"%";
+    $("fcBar").style.width=(px(d.fcHi)-px(d.fcLo))+"%";
+    $("fcPt").style.left=`calc(${px(d.fcPt)}% - 1.5px)`;
+    $("fcPt").style.background=d.fcPt>0?"var(--cheap)":"var(--rich)";
+    $("fcLo").textContent=sgn(d.fcLo)+" bp";
+    $("fcHi").textContent=sgn(d.fcHi)+" bp";
+  }
+
+  $("fcGiveback").innerHTML=`<b>${gbDir} ~${gb.bps.toFixed(1)}bp next day</b> — ≈${gb.pct}% of the ${gb.con.toFixed(1)}bp concession.`;
+  $("fcTrack").textContent=`Right direction in ${d.fcAccuracy}% of past 30Y auctions.`;
+
+  // Footprint
+  $("hlBig").textContent="~"+d.hl.toFixed(1)+" days";
+  $("hlText").textContent=`Half of this auction's push on the curve is gone after about ${d.hl.toFixed(1)} trading days; it largely washes out within ${Math.ceil(d.hl*3)}.`;
+
+  const aucDir=d.aucMove<0?"richening":"cheapening";
+  const aucAbs=Math.abs(d.aucMove).toFixed(1);
+  const revFull=d.rev5d>=Math.abs(d.aucMove);
+  $("hlReversal").innerHTML=revFull
+    ?`The full <b>${aucAbs}bp</b> post-auction ${aucDir} had reversed within 5 days.`
+    :`<b>~${d.rev5d.toFixed(1)}bp</b> of the ${aucAbs}bp post-auction ${aucDir} had reversed within 5 days.`;
+
+  drawDecay();
+}
+
+// ── Day render ────────────────────────────────────────────────────────────────
+function renderDay(){
+  const d=AUCTIONS[A], cur=d.curves[DAY], base=d.curves[0];
+  const mv=bps(cur[6],base[6]);
+  $("s_move").textContent=DAY===0?"0.0 bps":sgn(mv)+" bps";
+  $("s_move").className="big mono "+(mv>0?"pos":mv<0?"neg":"");
+  $("s_move_sub").textContent=DAY===0?"auction close (baseline)"
+    :mv>0?"cheaper than at the auction":mv<0?"richer than at the auction":"flat to the auction";
+  $("dayBig").textContent=DAY===0?"Auction close":"Day +"+DAY;
+  $("dayT").textContent=DAY===0?"the moment supply cleared":"trading day after auction";
+  drawCurve();
+  renderMetrics();
+}
+
+function renderLegend(){
+  $("legend").innerHTML=VIEW==="yield"
+    ?`<span style="color:var(--muted-2)"><i class="gh"></i>At auction close</span>
+      <span style="color:var(--rich)"><i></i>Now — richer (yields fell)</span>
+      <span style="color:var(--cheap)"><i></i>Now — cheaper (yields rose)</span>`
+    :`<span style="color:var(--rich)"><i></i>Richened (yields fell)</span>
+      <span style="color:var(--cheap)"><i></i>Cheapened (yields rose)</span>`;
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+function setView(v){
+  VIEW=v;
+  $("vYield").setAttribute("aria-pressed",v==="yield");
+  $("vChange").setAttribute("aria-pressed",v==="change");
+  renderLegend(); drawCurve();
+}
+$("vYield").onclick=()=>setView("yield");
+$("vChange").onclick=()=>setView("change");
+$("day").oninput=e=>{DAY=+e.target.value; renderDay();};
+
+function stopPlay(){
+  if(timer){clearInterval(timer);timer=null;$("playicon").setAttribute("d","M1 1l11 6L1 13z");}
+}
+$("play").onclick=()=>{
+  if(timer){stopPlay();return;}
+  $("playicon").setAttribute("d","M1 1h3v12H1zM9 1h3v12H9z");
+  DAY=0; $("day").value=0; renderDay();
+  timer=setInterval(()=>{if(DAY>=5){stopPlay();return;}DAY++;$("day").value=DAY;renderDay();}, reduce?10:620);
+};
+$("auc").onchange=e=>{A=e.target.value;DAY=1;$("day").value=1;stopPlay();renderStatic();renderDay();};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init(){
+  if(DATA_URL){
+    try{
+      const r=await fetch(DATA_URL);
+      AUCTIONS=await r.json();
+    }catch(e){console.warn("Failed to load dashboard data, using sample.",e);}
+  }
+  A=Object.keys(AUCTIONS)[0];
+  $("auc").innerHTML=Object.keys(AUCTIONS).map(k=>{
+    const parts=AUCTIONS[k].title.split(" · ");
+    return `<option value="${k}">${parts.slice(1).join(" · ")}</option>`;
+  }).join("");
+  renderLegend(); renderStatic(); renderDay();
+}
+init();
+</script>
+</body>
+</html>
