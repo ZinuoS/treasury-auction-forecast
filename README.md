@@ -1,13 +1,6 @@
 # Treasury Auction Curve Forecast
 
 A leakage-safe machine-learning pipeline that quantifies the intraday dislocation at US Treasury auctions and forecasts its influence on the yield curve over the following 1–10 business days.
-
----
-
-## Thesis 
-
-When a Treasury auction clears with a tail, the on-the-run bond dislocates from fair value, and the footprint decays with a measurable half-life — longer in stressed market regimes. That persistence is the signal.
-
 ---
 
 ## Pipeline stages
