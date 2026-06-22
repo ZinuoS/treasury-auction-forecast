@@ -1,6 +1,6 @@
 # Treasury Auction Curve Forecast
 
-A leakage-safe machine-learning pipeline that quantifies the intraday dislocation at US Treasury auctions and forecasts its influence on the yield curve over the following 1–10 business days.
+A leakage-safe machine-learning pipeline that quantifies the intraday dislocation at US Treasury auctions and forecasts its influence on the yield curve over the following 1–3 business days(with decay index half-life estimated) 
 ---
 
 ## Pipeline stages
